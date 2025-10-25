@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الملف الشخصي - منصة الدروس الجامعية</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-book-open"></i>
+                    <h1>منصة الدروس الجامعية</h1>
+                </div>
+                <nav class="nav">
+                    <a href="student-lessons.html" class="btn btn-outline">الدروس</a>
+                    <button onclick="logout()" class="btn btn-primary">
+                        <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+                    </button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Profile Content -->
+    <div class="profile-container">
+        <div id="loadingState" class="loading">
+            <div class="loading-spinner"></div>
+            <p>جاري تحميل البيانات...</p>
+        </div>
+        
+        <div id="profileContent" class="hidden">
+            <div class="profile-header">
+                <div class="profile-avatar" id="profileAvatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <h2 class="profile-name" id="profileName">-</h2>
+                <p class="profile-email" id="profileEmail">-</p>
+            </div>
+            
+            <div class="profile-info">
+                <div class="info-group">
+                    <span class="info-label">معرف المستخدم</span>
+                    <span class="info-value" id="userId">-</span>
+                </div>
+                
+                <div class="info-group">
+                    <span class="info-label">تاريخ التسجيل</span>
+                    <span class="info-value" id="createdAt">-</span>
+                </div>
+                
+                <div class="info-group">
+                    <span class="info-label">آخر تسجيل دخول</span>
+                    <span class="info-value" id="lastLogin">-</span>
+                </div>
+                
+                <div class="info-group">
+                    <span class="info-label">الدور</span>
+                    <span class="info-value" id="userRole">طالب</span>
+                </div>
+            </div>
+            
+            <div class="profile-actions">
+                <a href="student-lessons.html" class="btn btn-primary">
+                    <i class="fas fa-book"></i> الذهاب إلى الدروس
+                </a>
+                <button onclick="editProfile()" class="btn btn-outline">
+                    <i class="fas fa-edit"></i> تعديل الملف الشخصي
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <i class="fas fa-check-circle toast-icon"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-text">© 2024 منصة الدروس الجامعية. جميع الحقوق محفوظة.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        // Wait for Supabase to be ready
+        window.addEventListener('DOMContentLoaded', () => {
+            // Check if Supabase is loaded
+            if (typeof supabase === 'undefined') {
+                console.error('Supabase is not defined!');
+                alert('خطأ: لم يتم تحميل Supabase بشكل صحيح');
+                return;
+            }
+            
+            // Initialize auth listener if available
+            if (typeof initAuthListener === 'function') {
+                initAuthListener();
+            }
+            
+            // Load profile
+            loadProfile();
+        });
+        
+        // Load user profile
+        async function loadProfile() {
+            try {
+                console.log('Loading profile...');
+                
+                // Check if supabase exists
+                if (!supabase) {
+                    throw new Error('Supabase client not initialized');
+                }
+                
+                // Get current user
+                const { data: { user }, error: userError } = await supabase.auth.getUser();
+                
+                if (userError || !user) {
+                    console.error('No user logged in');
+                    window.location.href = 'login.html';
+                    return;
+                }
+                
+                // Get user profile from database
+                let profile = null;
+                try {
+                    const { data, error } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', user.id)
+                        .single();
+                    
+                    if (!error && data) {
+                        profile = data;
+                    } else if (error && error.code === 'PGRST116') {
+                        // Profile doesn't exist, create it
+                        console.log('Creating user profile...');
+                        const { data: newProfile } = await supabase
+                            .from('users')
+                            .insert({
+                                id: user.id,
+                                email: user.email,
+                                name: user.user_metadata?.full_name || user.email.split('@')[0],
+                                created_at: new Date().toISOString(),
+                                last_login: new Date().toISOString()
+                            })
+                            .select()
+                            .single();
+                        profile = newProfile;
+                    }
+                } catch (err) {
+                    console.error('Profile error:', err);
+                }
+                
+                // Display user data
+                document.getElementById('profileName').textContent = 
+                    profile?.name || profile?.full_name || user.email.split('@')[0];
+                document.getElementById('profileEmail').textContent = user.email;
+                document.getElementById('userId').textContent = user.id;
+                
+                // Format dates
+                if (user.created_at) {
+                    const createdDate = new Date(user.created_at);
+                    document.getElementById('createdAt').textContent = 
+                        createdDate.toLocaleDateString('ar-SA', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                        });
+                }
+                
+                if (profile?.last_login) {
+                    const lastLoginDate = new Date(profile.last_login);
+                    document.getElementById('lastLogin').textContent = 
+                        lastLoginDate.toLocaleDateString('ar-SA', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                } else {
+                    document.getElementById('lastLogin').textContent = 'الآن';
+                }
+                
+                // Set role
+                if (profile?.role) {
+                    const roleNames = {
+                        'student': 'طالب',
+                        'teacher': 'معلم',
+                        'admin': 'مدير'
+                    };
+                    document.getElementById('userRole').textContent = 
+                        roleNames[profile.role] || profile.role;
+                }
+                
+                // Set avatar initial
+                const initial = (profile?.name || profile?.full_name || user.email)[0].toUpperCase();
+                document.getElementById('profileAvatar').innerHTML = initial;
+                
+                // Hide loading, show content
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('profileContent').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error loading profile:', error);
+                showToast('حدث خطأ في تحميل البيانات', 'error');
+            }
+        }
+        
+        // Logout function
+        async function logout() {
+            try {
+                const { error } = await supabase.auth.signOut();
+                if (error) throw error;
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+                showToast('حدث خطأ في تسجيل الخروج', 'error');
+            }
+        }
+        
+        // Edit profile function
+        function editProfile() {
+            showToast('ميزة التعديل قيد التطوير', 'info');
+        }
+    </script>
+</body>
+</html>

@@ -90,61 +90,93 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
     <script>
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        // Initialize auth listener on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initAuthListener();
             
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            
-            try {
-                const { data, error } = await supabase.auth.signInWithPassword({
-                    email: email,
-                    password: password
+            // Check for auth errors from redirect
+            const authError = localStorage.getItem('authError');
+            if (authError) {
+                showToast(authError, 'error');
+                localStorage.removeItem('authError');
+            }
+        });
+        
+        // دالة تسجيل الدخول المبسطة
+        async function login() {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
+
+            if (error) {
+                alert("خطأ في تسجيل الدخول: " + error.message);
+                return;
+            }
+
+            console.log("✅ Login success");
+
+            // بعد النجاح → اجلب بيانات المستخدم
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+                // حفظ المستخدم في الجدول إذا لم يكن موجوداً
+                await supabase.from("users").upsert({
+                    id: user.id,
+                    email: user.email,
+                    name: user.user_metadata?.full_name || null
                 });
 
-                if (error) {
-                    if (error.message.includes('Email not confirmed')) {
-                        showToast('يرجى تأكيد بريدك الإلكتروني أولاً', 'error');
-                        setTimeout(() => {
-                            window.location.href = `email-confirmation.html?email=${encodeURIComponent(email)}`;
-                        }, 1500);
-                        return;
-                    }
-                    throw error;
-                }
+                console.log("✅ تم تحديث بيانات المستخدم في users");
 
-                showToast('تم تسجيل الدخول بنجاح!', 'success');
-                
-                // Check user role and redirect
-                const { data: userData } = await supabase
-                    .from('users')
-                    .select('role')
-                    .eq('id', data.user.id)
-                    .single();
-
-                setTimeout(() => {
-                    if (userData?.role === 'teacher') {
-                        window.location.href = 'teacher-dashboard.html';
-                    } else {
-                        window.location.href = 'student-lessons.html';
-                    }
-                }, 1500);
-            } catch (error) {
-                showToast(error.message || 'حدث خطأ في تسجيل الدخول', 'error');
+                window.location.href = "profile.html"; // أو صفحة أخرى مناسبة
             }
+        }
+        
+        // ربط النموذج بدالة تسجيل الدخول المبسطة
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await login(); // استدعاء الدالة المبسطة
         });
 
         async function loginWithGoogle() {
+            const googleBtn = document.querySelector('.btn-google');
+            
             try {
-                const { error } = await supabase.auth.signInWithOAuth({
+                // Show loading state
+                googleBtn.disabled = true;
+                googleBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الاتصال بـ Google...';
+                
+                const { data, error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
-                        redirectTo: window.location.origin + '/auth-callback.html'
+                        redirectTo: getRedirectUrl('/auth-callback.html'),
+                        queryParams: {
+                            access_type: 'offline',
+                            prompt: 'consent'
+                        },
+                        scopes: 'email profile'
                     }
                 });
-                if (error) throw error;
+                
+                if (error) {
+                    throw error;
+                }
+                
+                // Show success message
+                showToast('جاري التوجيه إلى Google...', 'success');
+                
             } catch (error) {
-                showToast('حدث خطأ في تسجيل الدخول بـ Google', 'error');
+                console.error('Google OAuth error:', error);
+                const errorMessage = handleAuthError(error);
+                showToast(errorMessage || 'حدث خطأ في تسجيل الدخول بـ Google', 'error');
+                
+                // Reset button state
+                googleBtn.disabled = false;
+                googleBtn.innerHTML = '<i class="fab fa-google"></i> تسجيل الدخول بـ Google';
             }
         }
     </script>

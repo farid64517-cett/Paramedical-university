@@ -7,46 +7,8 @@
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        .loading-container {
-            text-align: center;
-            background: white;
-            padding: 3rem;
-            border-radius: 1rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-        }
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 3px solid #e5e7eb;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1.5rem;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .loading-text {
-            color: #4b5563;
-            font-size: 1.2rem;
-            margin-bottom: 0.5rem;
-        }
-        .loading-subtext {
-            color: #9ca3af;
-            font-size: 0.95rem;
-        }
-    </style>
 </head>
-<body>
+<body class="auth-callback-body">
     <div class="loading-container">
         <div class="spinner"></div>
         <p class="loading-text">جاري تسجيل الدخول...</p>
@@ -55,59 +17,148 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
+    <script src="auth-manager.js"></script>
     <script>
+        // Initialize auth listener
+        initAuthListener();
+        
         async function handleAuthCallback() {
             try {
-                // Get the session from the URL
-                const { data: { session }, error } = await supabase.auth.getSession();
+                // معالجة رد OAuth من Google
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                const searchParams = new URLSearchParams(window.location.search);
                 
-                if (error) throw error;
+                // التحقق من وجود خطأ
+                const error = hashParams.get('error') || searchParams.get('error');
+                const errorDescription = hashParams.get('error_description') || searchParams.get('error_description');
                 
-                if (session) {
-                    // Check if user exists in database
-                    const { data: existingUser } = await supabase
+                if (error) {
+                    console.error('OAuth error:', error, errorDescription);
+                    localStorage.setItem('authError', errorDescription || 'حدث خطأ في تسجيل الدخول');
+                    window.location.href = 'login.html';
+                    return;
+                }
+                
+                // الحصول على الجلسة من Supabase
+                // انتظر قليلاً للسماح لـ Supabase بمعالجة التوكنات
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                
+                if (sessionError) {
+                    console.error('Session error:', sessionError);
+                    // حاول مرة أخرى
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    const { data: { session: retrySession } } = await supabase.auth.getSession();
+                    if (retrySession) {
+                        session = retrySession;
+                    } else {
+                        throw sessionError;
+                    }
+                }
+                
+                if (session && session.user) {
+                    // حفظ الجلسة في localStorage
+                    localStorage.setItem('auth_session', JSON.stringify({
+                        access_token: session.access_token,
+                        refresh_token: session.refresh_token,
+                        expires_at: session.expires_at,
+                        user_id: session.user.id
+                    }));
+                    // التحقق من وجود المستخدم في قاعدة البيانات
+                    const { data: existingUser, error: fetchError } = await supabase
                         .from('users')
                         .select('*')
                         .eq('id', session.user.id)
                         .single();
                     
+                    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = Row not found
+                        console.error('Error fetching user:', fetchError);
+                    }
+                    
                     if (!existingUser) {
-                        // Create new user record for Google sign-in
+                        // إنشاء سجل مستخدم جديد لتسجيل الدخول بـ Google
+                        const userData = {
+                            id: session.user.id,
+                            email: session.user.email,
+                            full_name: session.user.user_metadata?.full_name || 
+                                      session.user.user_metadata?.name ||
+                                      session.user.email.split('@')[0],
+                            role: 'student', // الدور الافتراضي للمستخدمين الجدد من Google
+                            profile_image: session.user.user_metadata?.avatar_url || 
+                                         session.user.user_metadata?.picture || null,
+                            email_verified: true, // Google يتحقق من البريد الإلكتروني
+                            created_at: new Date().toISOString(),
+                            last_login: new Date().toISOString()
+                        };
+                        
                         const { error: insertError } = await supabase
                             .from('users')
-                            .insert({
-                                id: session.user.id,
-                                email: session.user.email,
-                                name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
-                                role: 'student' // Default role for Google sign-in
-                            });
+                            .insert(userData);
                         
                         if (insertError) {
                             console.error('Error creating user record:', insertError);
+                            // إذا كان الخطأ بسبب عدم وجود الجدول، أعطي رسالة واضحة
+                            if (insertError.code === '42P01' || insertError.message.includes('relation') || insertError.message.includes('does not exist')) {
+                                localStorage.setItem('authError', 'يرجى الاتصال بمدير النظام - لم يتم إعداد قاعدة البيانات بعد');
+                                // متابعة على أي حال لأن المستخدم مسجل في auth
+                                setTimeout(() => {
+                                    window.location.href = 'student-lessons.html';
+                                }, 1000);
+                                return;
+                            }
+                            // متابعة حتى لو فشل الإدراج (قد يكون المستخدم موجود بالفعل)
                         }
                         
-                        // Redirect to student page for new users
-                        window.location.href = 'student-lessons.html';
-                    } else {
-                        // Redirect based on existing user role
-                        if (existingUser.role === 'teacher') {
-                            window.location.href = 'teacher-dashboard.html';
-                        } else {
+                        // تسجيل النشاط
+                        await authManager.logActivity('تسجيل دخول جديد بـ Google');
+                        
+                        // توجيه المستخدمين الجدد إلى صفحة الطالب
+                        setTimeout(() => {
                             window.location.href = 'student-lessons.html';
-                        }
+                        }, 1000);
+                    } else {
+                        // تحديث آخر تسجيل دخول
+                        await supabase
+                            .from('users')
+                            .update({ 
+                                last_login: new Date().toISOString(),
+                                profile_image: session.user.user_metadata?.avatar_url || 
+                                             session.user.user_metadata?.picture || 
+                                             existingUser.profile_image
+                            })
+                            .eq('id', session.user.id);
+                        
+                        // تسجيل النشاط
+                        await authManager.logActivity('تسجيل دخول بـ Google');
+                        
+                        // التوجيه بناءً على دور المستخدم
+                        setTimeout(() => {
+                            if (existingUser.role === 'teacher') {
+                                window.location.href = 'teacher-dashboard.html';
+                            } else if (existingUser.role === 'admin') {
+                                window.location.href = 'admin-dashboard.html';
+                            } else {
+                                window.location.href = 'student-lessons.html';
+                            }
+                        }, 1000);
                     }
                 } else {
-                    // No session, redirect to login
+                    // لا توجد جلسة، إعادة التوجيه إلى صفحة تسجيل الدخول
+                    console.log('No session found');
                     window.location.href = 'login.html';
                 }
             } catch (error) {
                 console.error('Auth callback error:', error);
+                localStorage.setItem('authError', 'حدث خطأ في معالجة تسجيل الدخول');
                 window.location.href = 'login.html';
             }
         }
         
-        // Handle auth callback on page load
-        handleAuthCallback();
+        // معالجة رد المصادقة عند تحميل الصفحة
+        window.addEventListener('DOMContentLoaded', () => {
+            handleAuthCallback();
+        });
     </script>
 </body>
 </html>

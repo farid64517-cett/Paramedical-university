@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار المصادقة</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="test-auth-container">
+        <h1>🔍 اختبار نظام المصادقة</h1>
+        
+        <div class="section">
+            <h2>1. فحص Supabase</h2>
+            <div id="supabaseStatus" class="status">جاري الفحص...</div>
+        </div>
+
+        <div class="section">
+            <h2>2. حالة تسجيل الدخول</h2>
+            <div id="authStatus" class="status">جاري الفحص...</div>
+            <button onclick="checkSession()" class="btn-primary">فحص الجلسة</button>
+            <button onclick="getUser()" class="btn-primary">جلب المستخدم</button>
+        </div>
+
+        <div class="section">
+            <h2>3. تسجيل دخول تجريبي</h2>
+            <input type="email" id="testEmail" placeholder="البريد الإلكتروني" class="test-input">
+            <input type="password" id="testPassword" placeholder="كلمة المرور" class="test-input">
+            <br>
+            <button onclick="testLogin()" class="btn-success">تسجيل دخول</button>
+            <button onclick="testLogout()" class="btn-danger">تسجيل خروج</button>
+        </div>
+
+        <div class="section">
+            <h2>4. معلومات المستخدم</h2>
+            <div id="userInfo" class="status info">لم يتم تسجيل الدخول بعد</div>
+        </div>
+
+        <div class="section">
+            <h2>5. سجل الأحداث</h2>
+            <pre id="log"></pre>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const log = (message, type = 'info') => {
+            const logElement = document.getElementById('log');
+            const time = new Date().toLocaleTimeString('ar-SA');
+            const emoji = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+            logElement.innerHTML += `${time} ${emoji} ${message}\n`;
+            console.log(message);
+        };
+
+        // Check if Supabase is loaded
+        const checkSupabase = () => {
+            const status = document.getElementById('supabaseStatus');
+            if (typeof window.supabase !== 'undefined') {
+                status.className = 'status success';
+                status.innerHTML = '✅ Supabase محمّل بنجاح';
+                log('Supabase library loaded', 'success');
+                return true;
+            } else {
+                status.className = 'status error';
+                status.innerHTML = '❌ Supabase غير محمّل';
+                log('Supabase library not found', 'error');
+                return false;
+            }
+        };
+
+        // Initialize Supabase
+        let supabase = null;
+        const initSupabase = () => {
+            try {
+                if (!checkSupabase()) return false;
+                
+                const SUPABASE_URL = 'https://sjkhvzgxswjzhgsvzrac.supabase.co';
+                const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqa2h2emd4c3dqemhnc3Z6cmFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEzNzAwNjQsImV4cCI6MjA3Njk0NjA2NH0.ZeyFRhzjm7X3YIipZI_cNQQzeAPnl3CZyVy0NeMDTe0';
+                
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                    auth: {
+                        autoRefreshToken: true,
+                        persistSession: true,
+                        detectSessionInUrl: true,
+                        storage: window.localStorage
+                    }
+                });
+                
+                log('Supabase client initialized', 'success');
+                document.getElementById('supabaseStatus').innerHTML += '<br>✅ Client تم إنشاؤه بنجاح';
+                return true;
+            } catch (error) {
+                log('Error initializing Supabase: ' + error.message, 'error');
+                return false;
+            }
+        };
+
+        // Check session
+        async function checkSession() {
+            try {
+                if (!supabase) {
+                    log('Supabase not initialized', 'error');
+                    return;
+                }
+                
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error) {
+                    log('Session error: ' + error.message, 'error');
+                    document.getElementById('authStatus').className = 'status error';
+                    document.getElementById('authStatus').innerHTML = '❌ خطأ: ' + error.message;
+                } else if (session) {
+                    log('Session found: ' + session.user.email, 'success');
+                    document.getElementById('authStatus').className = 'status success';
+                    document.getElementById('authStatus').innerHTML = '✅ جلسة نشطة: ' + session.user.email;
+                    displayUserInfo(session.user);
+                } else {
+                    log('No active session', 'info');
+                    document.getElementById('authStatus').className = 'status info';
+                    document.getElementById('authStatus').innerHTML = 'ℹ️ لا توجد جلسة نشطة';
+                }
+            } catch (error) {
+                log('Check session error: ' + error.message, 'error');
+            }
+        }
+
+        // Get user
+        async function getUser() {
+            try {
+                if (!supabase) {
+                    log('Supabase not initialized', 'error');
+                    return;
+                }
+                
+                const { data: { user }, error } = await supabase.auth.getUser();
+                
+                if (error) {
+                    log('Get user error: ' + error.message, 'error');
+                } else if (user) {
+                    log('User found: ' + user.email, 'success');
+                    displayUserInfo(user);
+                } else {
+                    log('No user logged in', 'info');
+                }
+            } catch (error) {
+                log('Get user error: ' + error.message, 'error');
+            }
+        }
+
+        // Test login
+        async function testLogin() {
+            try {
+                const email = document.getElementById('testEmail').value;
+                const password = document.getElementById('testPassword').value;
+                
+                if (!email || !password) {
+                    log('Please enter email and password', 'error');
+                    return;
+                }
+                
+                if (!supabase) {
+                    log('Supabase not initialized', 'error');
+                    return;
+                }
+                
+                log('Attempting login for: ' + email, 'info');
+                
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+                
+                if (error) {
+                    log('Login error: ' + error.message, 'error');
+                    alert('خطأ: ' + error.message);
+                } else {
+                    log('Login successful!', 'success');
+                    alert('تم تسجيل الدخول بنجاح!');
+                    checkSession();
+                }
+            } catch (error) {
+                log('Login error: ' + error.message, 'error');
+            }
+        }
+
+        // Test logout
+        async function testLogout() {
+            try {
+                if (!supabase) {
+                    log('Supabase not initialized', 'error');
+                    return;
+                }
+                
+                const { error } = await supabase.auth.signOut();
+                
+                if (error) {
+                    log('Logout error: ' + error.message, 'error');
+                } else {
+                    log('Logout successful', 'success');
+                    document.getElementById('authStatus').className = 'status info';
+                    document.getElementById('authStatus').innerHTML = 'ℹ️ تم تسجيل الخروج';
+                    document.getElementById('userInfo').className = 'status info';
+                    document.getElementById('userInfo').innerHTML = 'لم يتم تسجيل الدخول';
+                }
+            } catch (error) {
+                log('Logout error: ' + error.message, 'error');
+            }
+        }
+
+        // Display user info
+        function displayUserInfo(user) {
+            const info = document.getElementById('userInfo');
+            info.className = 'status success';
+            info.innerHTML = `
+                <strong>معلومات المستخدم:</strong><br>
+                📧 البريد: ${user.email}<br>
+                🆔 ID: ${user.id}<br>
+                📅 تاريخ الإنشاء: ${new Date(user.created_at).toLocaleString('ar-SA')}<br>
+                ✅ تأكيد البريد: ${user.email_confirmed_at ? 'مؤكد' : 'غير مؤكد'}
+            `;
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            log('Page loaded', 'info');
+            if (initSupabase()) {
+                checkSession();
+            }
+        });
+    </script>
+</body>
+</html>
