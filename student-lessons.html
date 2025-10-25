@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الدروس المتاحة - منصة الدروس الجامعية</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="dashboard">
+    <!-- Header -->
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="header-content">
+                <div>
+                    <h1>الدروس المتاحة</h1>
+                    <p id="userName">مرحباً، طالب</p>
+                </div>
+                <button onclick="logout()" class="btn btn-outline">
+                    <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Dashboard Content -->
+    <div class="dashboard-content">
+        <div class="container">
+            <!-- Search and Filter -->
+            <div class="search-container">
+                <div class="search-grid">
+                    <input type="text" class="search-input" id="searchInput" placeholder="البحث عن درس..." onkeyup="filterLessons()">
+                    <select class="filter-select" id="subjectFilter" title="اختر المادة" aria-label="تصفية حسب المادة" onchange="filterLessons()">
+                        <option value="">جميع المواد</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Lessons Grid -->
+            <div id="lessonsGrid" class="lessons-grid">
+                <!-- Lessons will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Modal -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>الدرس محمي بكلمة مرور</h2>
+                <span class="modal-close" onclick="closePasswordModal()">&times;</span>
+            </div>
+            
+            <p class="modal-description">
+                يرجى إدخال كلمة المرور للوصول إلى درس "<span id="protectedLessonTitle"></span>"
+            </p>
+            
+            <div class="form-group">
+                <label class="form-label">كلمة المرور</label>
+                <input type="password" class="form-input" id="lessonPasswordInput" placeholder="أدخل كلمة المرور">
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closePasswordModal()">إلغاء</button>
+                <button class="btn btn-primary" onclick="unlockLesson()">فتح الدرس</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lesson Details Modal -->
+    <div id="lessonDetailsModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="lessonDetailsTitle">عنوان الدرس</h2>
+                <span class="modal-close" onclick="closeLessonDetailsModal()">&times;</span>
+            </div>
+            
+            <div class="lesson-meta">
+                <p class="meta-item"><strong>المادة:</strong> <span id="lessonDetailsSubject"></span></p>
+                <p class="meta-item"><strong>الأستاذ:</strong> <span id="lessonDetailsTeacher"></span></p>
+                <p class="meta-item"><strong>التاريخ:</strong> <span id="lessonDetailsDate"></span></p>
+            </div>
+            
+            <div class="lesson-description-section">
+                <h3 class="section-title">الوصف</h3>
+                <p id="lessonDetailsDescription" class="description-text">لا يوجد وصف</p>
+            </div>
+            
+            <div>
+                <h3 class="section-title">الملفات المرفقة</h3>
+                <div id="lessonFiles" class="file-list">
+                    <!-- Files will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <i class="fas fa-check-circle toast-icon"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-text">© 2027 منصة الدروس الجامعية شبه الطبية. جميع الحقوق محفوظة.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        let lessons = [];
+        let filteredLessons = [];
+        let subjects = [];
+        let currentLesson = null;
+        let unlockedLessons = [];
+
+        // Check authentication on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkAuth();
+            if (!user) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // Load user data
+            const { data: userData } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+            
+            document.getElementById('userName').textContent = `مرحباً، ${userData?.name || 'طالب'}`;
+            
+            // Load lessons
+            loadLessons();
+        });
+
+        async function loadLessons() {
+            const { data, error } = await supabase
+                .from('lessons')
+                .select(`
+                    *,
+                    teacher:users!lessons_teacher_id_fkey (name),
+                    files (*)
+                `)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                showToast('حدث خطأ في جلب الدروس', 'error');
+                return;
+            }
+
+            lessons = data || [];
+            filteredLessons = lessons;
+            
+            // Extract unique subjects
+            subjects = [...new Set(lessons.map(l => l.subject))];
+            populateSubjectFilter();
+            
+            displayLessons();
+        }
+
+        function populateSubjectFilter() {
+            const filter = document.getElementById('subjectFilter');
+            filter.innerHTML = '<option value="">جميع المواد</option>';
+            subjects.forEach(subject => {
+                filter.innerHTML += `<option value="${subject}">${subject}</option>`;
+            });
+        }
+
+        function filterLessons() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const selectedSubject = document.getElementById('subjectFilter').value;
+            
+            filteredLessons = lessons.filter(lesson => {
+                const matchesSearch = !searchTerm || 
+                    lesson.title.toLowerCase().includes(searchTerm) ||
+                    lesson.description?.toLowerCase().includes(searchTerm) ||
+                    lesson.subject.toLowerCase().includes(searchTerm);
+                
+                const matchesSubject = !selectedSubject || lesson.subject === selectedSubject;
+                
+                return matchesSearch && matchesSubject;
+            });
+            
+            displayLessons();
+        }
+
+        function displayLessons() {
+            const grid = document.getElementById('lessonsGrid');
+            
+            if (filteredLessons.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-book empty-state-icon"></i>
+                        <p class="empty-state-title">لا توجد دروس متاحة</p>
+                        <p class="empty-state-text">جرب تغيير معايير البحث</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = filteredLessons.map(lesson => `
+                <div class="lesson-card">
+                    <div class="lesson-header">
+                        <h3 class="lesson-title">${lesson.title}</h3>
+                        <p class="lesson-subject">${lesson.subject}</p>
+                        ${lesson.is_protected ? '<i class="fas fa-lock lesson-lock-icon"></i>' : ''}
+                    </div>
+                    <div class="lesson-body">
+                        <p class="lesson-description">
+                            ${lesson.description || 'لا يوجد وصف'}
+                        </p>
+                        <div class="lesson-info">
+                            <span>الأستاذ: ${lesson.teacher?.name || 'غير محدد'}</span>
+                            <span>الملفات: ${lesson.files?.length || 0}</span>
+                        </div>
+                        ${lesson.files && lesson.files.length > 0 ? `
+                            <div class="lesson-files">
+                                ${lesson.files.slice(0, 3).map(file => `
+                                    <span class="file-tag">
+                                        <i class="fas fa-file"></i>
+                                        ${file.file_name.substring(0, 15)}...
+                                    </span>
+                                `).join('')}
+                                ${lesson.files.length > 3 ? `<span class="file-tag">+${lesson.files.length - 3} أخرى</span>` : ''}
+                            </div>
+                        ` : ''}
+                        <button class="btn btn-primary btn-full" onclick="viewLessonById('${lesson.id}')">
+                            <i class="fas fa-eye"></i> عرض الدرس
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function viewLessonById(lessonId) {
+            const lesson = lessons.find(l => l.id === lessonId);
+            if (!lesson) return;
+            currentLesson = lesson;
+            
+            if (lesson.is_protected && !unlockedLessons.includes(lesson.id)) {
+                document.getElementById('protectedLessonTitle').textContent = lesson.title;
+                document.getElementById('passwordModal').classList.add('active');
+            } else {
+                showLessonDetails();
+            }
+        }
+
+        function unlockLesson() {
+            const password = document.getElementById('lessonPasswordInput').value;
+            
+            if (!password) {
+                showToast('يرجى إدخال كلمة المرور', 'error');
+                return;
+            }
+            
+            // Simple password check (in production, this should be done server-side)
+            if (password === currentLesson.password) {
+                unlockedLessons.push(currentLesson.id);
+                closePasswordModal();
+                showLessonDetails();
+                showToast('تم فتح الدرس بنجاح', 'success');
+            } else {
+                showToast('كلمة المرور غير صحيحة', 'error');
+            }
+        }
+
+        function showLessonDetails() {
+            document.getElementById('lessonDetailsTitle').textContent = currentLesson.title;
+            document.getElementById('lessonDetailsSubject').textContent = currentLesson.subject;
+            document.getElementById('lessonDetailsTeacher').textContent = currentLesson.teacher?.name || 'غير محدد';
+            document.getElementById('lessonDetailsDate').textContent = formatDate(currentLesson.created_at);
+            document.getElementById('lessonDetailsDescription').textContent = currentLesson.description || 'لا يوجد وصف';
+            
+            const filesContainer = document.getElementById('lessonFiles');
+            if (currentLesson.files && currentLesson.files.length > 0) {
+                filesContainer.innerHTML = currentLesson.files.map(file => `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <i class="fas fa-file"></i>
+                            <span>${file.file_name} (${formatFileSize(file.file_size)})</span>
+                        </div>
+                        <button class="btn btn-primary" onclick="downloadFile('${file.file_url}', '${file.file_name}')">
+                            <i class="fas fa-download"></i> تحميل
+                        </button>
+                    </div>
+                `).join('');
+            } else {
+                filesContainer.innerHTML = '<p class="no-files-text">لا توجد ملفات مرفقة</p>';
+            }
+            
+            document.getElementById('lessonDetailsModal').classList.add('active');
+        }
+
+        function downloadFile(url, filename) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('جاري تحميل الملف...', 'success');
+        }
+
+        function closePasswordModal() {
+            document.getElementById('passwordModal').classList.remove('active');
+            document.getElementById('lessonPasswordInput').value = '';
+        }
+
+        function closeLessonDetailsModal() {
+            document.getElementById('lessonDetailsModal').classList.remove('active');
+        }
+    </script>
+</body>
+</html>

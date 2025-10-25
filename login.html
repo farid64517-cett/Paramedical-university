@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل الدخول - منصة الدروس الجامعية</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-book-open"></i>
+                    <h1>منصة الدروس الجامعية</h1>
+                </div>
+                <nav class="nav">
+                    <a href="index.html" class="btn btn-outline">الرئيسية</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Login Form -->
+    <div class="form-container">
+        <div class="form-header">
+            <div class="form-icon">
+                <i class="fas fa-user-circle"></i>
+            </div>
+            <h2 class="form-title">تسجيل الدخول</h2>
+            <p class="form-description">أدخل بياناتك للوصول إلى حسابك</p>
+        </div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label class="form-label">البريد الإلكتروني</label>
+                <div class="input-group">
+                    <i class="fas fa-envelope input-icon"></i>
+                    <input type="email" class="form-input with-icon" id="email" placeholder="example@email.com" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">كلمة المرور</label>
+                <div class="input-group">
+                    <i class="fas fa-lock input-icon"></i>
+                    <input type="password" class="form-input with-icon" id="password" placeholder="••••••••" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full-width">
+                تسجيل الدخول
+            </button>
+        </form>
+
+        <div class="divider-container">
+            <hr class="divider-line">
+            <span class="divider-text">أو</span>
+        </div>
+
+        <button onclick="loginWithGoogle()" class="btn btn-outline btn-google">
+            <i class="fab fa-google"></i>
+            تسجيل الدخول بـ Google
+        </button>
+
+        <div class="form-footer">
+            <p>ليس لديك حساب؟ <a href="register.html">إنشاء حساب جديد</a></p>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <i class="fas fa-check-circle toast-icon"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-text">© 2027 منصة الدروس الجامعية شبه الطبية. جميع الحقوق محفوظة.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+
+                if (error) throw error;
+
+                showToast('تم تسجيل الدخول بنجاح!', 'success');
+                
+                // Check user role and redirect
+                const { data: userData } = await supabase
+                    .from('users')
+                    .select('role')
+                    .eq('id', data.user.id)
+                    .single();
+
+                setTimeout(() => {
+                    if (userData?.role === 'teacher') {
+                        window.location.href = 'teacher-dashboard.html';
+                    } else {
+                        window.location.href = 'student-lessons.html';
+                    }
+                }, 1500);
+            } catch (error) {
+                showToast(error.message || 'حدث خطأ في تسجيل الدخول', 'error');
+            }
+        });
+
+        async function loginWithGoogle() {
+            try {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.origin + '/auth-callback.html'
+                    }
+                });
+                if (error) throw error;
+            } catch (error) {
+                showToast('حدث خطأ في تسجيل الدخول بـ Google', 'error');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إنشاء حساب - منصة الدروس الجامعية</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-book-open"></i>
+                    <h1>منصة الدروس الجامعية</h1>
+                </div>
+                <nav class="nav">
+                    <a href="index.html" class="btn btn-outline">الرئيسية</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Register Form -->
+    <div class="form-container">
+        <div class="form-header">
+            <div class="form-icon">
+                <i class="fas fa-user-plus"></i>
+            </div>
+            <h2 class="form-title">إنشاء حساب جديد</h2>
+            <p class="form-description">أنشئ حسابك للوصول إلى منصة الدروس</p>
+        </div>
+
+        <form id="registerForm">
+            <div class="form-group">
+                <label class="form-label">نوع الحساب</label>
+                <div class="role-selector">
+                    <button type="button" class="btn btn-primary" id="studentBtn" onclick="selectRole('student')">
+                        <i class="fas fa-user-graduate"></i> طالب
+                    </button>
+                    <button type="button" class="btn btn-outline" id="teacherBtn" onclick="selectRole('teacher')">
+                        <i class="fas fa-chalkboard-teacher"></i> أستاذ
+                    </button>
+                </div>
+                <input type="hidden" id="role" value="student">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">الاسم الكامل</label>
+                <div class="input-group">
+                    <i class="fas fa-user input-icon"></i>
+                    <input type="text" class="form-input with-icon" id="name" placeholder="أدخل اسمك الكامل" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">البريد الإلكتروني</label>
+                <div class="input-group">
+                    <i class="fas fa-envelope input-icon"></i>
+                    <input type="email" class="form-input with-icon" id="email" placeholder="example@email.com" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">كلمة المرور</label>
+                <div class="input-group">
+                    <i class="fas fa-lock input-icon"></i>
+                    <input type="password" class="form-input with-icon" id="password" placeholder="••••••••" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">تأكيد كلمة المرور</label>
+                <div class="input-group">
+                    <i class="fas fa-lock input-icon"></i>
+                    <input type="password" class="form-input with-icon" id="confirmPassword" placeholder="••••••••" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full-width">
+                إنشاء حساب
+            </button>
+        </form>
+
+        <div class="form-footer">
+            <p>لديك حساب بالفعل؟ <a href="login.html">تسجيل الدخول</a></p>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <i class="fas fa-check-circle toast-icon"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-text">© 2027 منصة الدروس الجامعية شبه الطبية. جميع الحقوق محفوظة.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        let selectedRole = 'student';
+
+        function selectRole(role) {
+            selectedRole = role;
+            document.getElementById('role').value = role;
+            
+            if (role === 'student') {
+                document.getElementById('studentBtn').className = 'btn btn-primary';
+                document.getElementById('teacherBtn').className = 'btn btn-outline';
+            } else {
+                document.getElementById('studentBtn').className = 'btn btn-outline';
+                document.getElementById('teacherBtn').className = 'btn btn-primary';
+            }
+        }
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (password !== confirmPassword) {
+                showToast('كلمات المرور غير متطابقة!', 'error');
+                return;
+            }
+            
+            if (password.length < 6) {
+                showToast('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error');
+                return;
+            }
+            
+            try {
+                const { data: authData, error: authError } = await supabase.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: {
+                        data: {
+                            name: name,
+                            role: selectedRole
+                        }
+                    }
+                });
+
+                if (authError) throw authError;
+
+                // Create user record in database
+                if (authData.user) {
+                    const { error: dbError } = await supabase
+                        .from('users')
+                        .insert({
+                            id: authData.user.id,
+                            email: email,
+                            name: name,
+                            role: selectedRole
+                        });
+
+                    if (dbError) throw dbError;
+                }
+
+                showToast('تم إنشاء الحساب بنجاح! يرجى تأكيد بريدك الإلكتروني', 'success');
+                
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 2000);
+            } catch (error) {
+                showToast(error.message || 'حدث خطأ في إنشاء الحساب', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

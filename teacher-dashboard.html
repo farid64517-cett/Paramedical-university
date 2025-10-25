@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم الأستاذ - منصة الدروس الجامعية</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="dashboard">
+    <!-- Header -->
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="header-content">
+                <div>
+                    <h1>لوحة تحكم الأستاذ</h1>
+                    <p id="userName">مرحباً، أستاذ</p>
+                </div>
+                <button onclick="logout()" class="btn btn-outline">
+                    <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Dashboard Content -->
+    <div class="dashboard-content">
+        <div class="container">
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalLessons">0</div>
+                    <div class="stat-label">إجمالي الدروس</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalFiles">0</div>
+                    <div class="stat-label">إجمالي الملفات</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="protectedLessons">0</div>
+                    <div class="stat-label">دروس محمية</div>
+                </div>
+            </div>
+
+            <!-- Add Lesson Button -->
+            <div class="add-lesson-container">
+                <button onclick="openAddLessonModal()" class="btn btn-primary btn-lg">
+                    <i class="fas fa-plus"></i> إضافة درس جديد
+                </button>
+            </div>
+
+            <!-- Lessons Grid -->
+            <div id="lessonsGrid" class="lessons-grid">
+                <!-- Lessons will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Lesson Modal -->
+    <div id="addLessonModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>إضافة درس جديد</h2>
+                <span class="modal-close" onclick="closeAddLessonModal()">&times;</span>
+            </div>
+            
+            <form id="addLessonForm">
+                <div class="form-group">
+                    <label class="form-label">عنوان الدرس *</label>
+                    <input type="text" class="form-input" id="lessonTitle" placeholder="أدخل عنوان الدرس" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">المادة *</label>
+                    <input type="text" class="form-input" id="lessonSubject" placeholder="مثال: علم التشريح، علم الأدوية..." required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">الوصف</label>
+                    <textarea class="form-input" id="lessonDescription" rows="3" placeholder="وصف مختصر للدرس"></textarea>
+                </div>
+
+                <div class="form-checkbox">
+                    <input type="checkbox" id="isProtected" onchange="togglePasswordField()">
+                    <label for="isProtected">حماية الدرس بكلمة مرور</label>
+                </div>
+
+                <div class="form-group hidden" id="passwordField">
+                    <label class="form-label">كلمة المرور</label>
+                    <input type="password" class="form-input" id="lessonPassword" placeholder="أدخل كلمة مرور للدرس">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">رفع الملفات</label>
+                    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                        <p class="upload-text">اضغط لاختيار الملفات أو اسحبها هنا</p>
+                        <p class="upload-hint">PDF, Word, صور, فيديو (حد أقصى 50MB)</p>
+                    </div>
+                    <input type="file" id="fileInput" class="hidden-input" aria-label="اختر الملفات للرفع" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.mp4,.mpeg" onchange="handleFileSelect(event)">
+                    
+                    <div id="fileList" class="file-list"></div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" onclick="closeAddLessonModal()">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">إنشاء الدرس</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <i class="fas fa-check-circle toast-icon"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-text">© 2027 منصة الدروس الجامعية شبه الطبية. جميع الحقوق محفوظة.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        let selectedFiles = [];
+        let lessons = [];
+
+        // Check authentication on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkAuth();
+            if (!user) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // Load user data
+            const { data: userData } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+            
+            if (userData?.role !== 'teacher') {
+                window.location.href = 'student-lessons.html';
+                return;
+            }
+            
+            document.getElementById('userName').textContent = `مرحباً، ${userData.name}`;
+            
+            // Load lessons
+            loadLessons();
+        });
+
+        async function loadLessons() {
+            const user = await checkAuth();
+            if (!user) return;
+
+            const { data, error } = await supabase
+                .from('lessons')
+                .select('*, files(*)')
+                .eq('teacher_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                showToast('حدث خطأ في جلب الدروس', 'error');
+                return;
+            }
+
+            lessons = data || [];
+            displayLessons();
+            updateStats();
+        }
+
+        function displayLessons() {
+            const grid = document.getElementById('lessonsGrid');
+            
+            if (lessons.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-book empty-state-icon"></i>
+                        <p class="empty-state-title">لا توجد دروس حتى الآن</p>
+                        <p class="empty-state-text">ابدأ بإضافة درسك الأول</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = lessons.map(lesson => `
+                <div class="lesson-card">
+                    <div class="lesson-header">
+                        <h3 class="lesson-title">${lesson.title}</h3>
+                        <p class="lesson-subject">${lesson.subject}</p>
+                        ${lesson.is_protected ? '<i class="fas fa-lock lesson-lock-icon"></i>' : ''}
+                    </div>
+                    <div class="lesson-body">
+                        <p class="lesson-description">
+                            ${lesson.description || 'لا يوجد وصف'}
+                        </p>
+                        <div class="lesson-info">
+                            <span>عدد الملفات: ${lesson.files?.length || 0}</span>
+                            <span>${formatDate(lesson.created_at)}</span>
+                        </div>
+                        <div class="lesson-actions">
+                            <button class="btn btn-outline" onclick="viewLesson('${lesson.id}')">
+                                <i class="fas fa-eye"></i> عرض
+                            </button>
+                            <button class="btn btn-danger" onclick="deleteLesson('${lesson.id}')">
+                                <i class="fas fa-trash"></i> حذف
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateStats() {
+            document.getElementById('totalLessons').textContent = lessons.length;
+            document.getElementById('totalFiles').textContent = lessons.reduce((sum, lesson) => sum + (lesson.files?.length || 0), 0);
+            document.getElementById('protectedLessons').textContent = lessons.filter(l => l.is_protected).length;
+        }
+
+        function openAddLessonModal() {
+            document.getElementById('addLessonModal').classList.add('active');
+        }
+
+        function closeAddLessonModal() {
+            document.getElementById('addLessonModal').classList.remove('active');
+            document.getElementById('addLessonForm').reset();
+            selectedFiles = [];
+            document.getElementById('fileList').innerHTML = '';
+            document.getElementById('passwordField').classList.add('hidden');
+        }
+
+        function togglePasswordField() {
+            const isProtected = document.getElementById('isProtected').checked;
+            const passwordField = document.getElementById('passwordField');
+            if (isProtected) {
+                passwordField.classList.remove('hidden');
+            } else {
+                passwordField.classList.add('hidden');
+            }
+        }
+
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            
+            files.forEach(file => {
+                // Check file size (max 50MB)
+                if (file.size > 50 * 1024 * 1024) {
+                    showToast(`الملف ${file.name} كبير جداً (الحد الأقصى 50MB)`, 'error');
+                    return;
+                }
+                
+                selectedFiles.push(file);
+            });
+            
+            displaySelectedFiles();
+        }
+
+        function displaySelectedFiles() {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = selectedFiles.map((file, index) => `
+                <div class="file-item">
+                    <div class="file-info">
+                        <i class="fas fa-file"></i>
+                        <span>${file.name} (${formatFileSize(file.size)})</span>
+                    </div>
+                    <i class="fas fa-times file-remove" onclick="removeFile(${index})"></i>
+                </div>
+            `).join('');
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            displaySelectedFiles();
+        }
+
+        document.getElementById('addLessonForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const user = await checkAuth();
+            if (!user) return;
+
+            const title = document.getElementById('lessonTitle').value;
+            const subject = document.getElementById('lessonSubject').value;
+            const description = document.getElementById('lessonDescription').value;
+            const isProtected = document.getElementById('isProtected').checked;
+            const password = document.getElementById('lessonPassword').value;
+
+            if (isProtected && !password) {
+                showToast('يرجى إدخال كلمة مرور للدرس المحمي', 'error');
+                return;
+            }
+
+            try {
+                // Create lesson
+                const { data: lessonData, error: lessonError } = await supabase
+                    .from('lessons')
+                    .insert({
+                        title,
+                        description,
+                        subject,
+                        teacher_id: user.id,
+                        is_protected: isProtected,
+                        password: isProtected ? password : null // Note: In production, hash the password
+                    })
+                    .select()
+                    .single();
+
+                if (lessonError) throw lessonError;
+
+                // Upload files if any
+                if (selectedFiles.length > 0) {
+                    for (const file of selectedFiles) {
+                        const fileName = `${Date.now()}_${file.name}`;
+                        const { error: uploadError } = await supabase.storage
+                            .from('files')
+                            .upload(fileName, file);
+
+                        if (!uploadError) {
+                            const { data: { publicUrl } } = supabase.storage
+                                .from('files')
+                                .getPublicUrl(fileName);
+
+                            await supabase.from('files').insert({
+                                lesson_id: lessonData.id,
+                                file_name: file.name,
+                                file_url: publicUrl,
+                                file_type: getFileType(file),
+                                file_size: file.size
+                            });
+                        }
+                    }
+                }
+
+                showToast('تم إنشاء الدرس بنجاح', 'success');
+                closeAddLessonModal();
+                loadLessons();
+            } catch (error) {
+                showToast('حدث خطأ في إنشاء الدرس', 'error');
+            }
+        });
+
+        function getFileType(file) {
+            if (file.type.includes('pdf')) return 'pdf';
+            if (file.type.includes('word') || file.name.endsWith('.doc') || file.name.endsWith('.docx')) return 'word';
+            if (file.type.includes('image')) return 'image';
+            if (file.type.includes('video')) return 'video';
+            return 'other';
+        }
+
+        async function deleteLesson(lessonId) {
+            if (!confirm('هل أنت متأكد من حذف هذا الدرس؟')) return;
+
+            try {
+                const { error } = await supabase
+                    .from('lessons')
+                    .delete()
+                    .eq('id', lessonId);
+
+                if (error) throw error;
+                
+                showToast('تم حذف الدرس بنجاح', 'success');
+                loadLessons();
+            } catch (error) {
+                showToast('حدث خطأ في حذف الدرس', 'error');
+            }
+        }
+
+        function viewLesson(lessonId) {
+            window.location.href = `lesson-details.html?id=${lessonId}`;
+        }
+    </script>
+</body>
+</html>
