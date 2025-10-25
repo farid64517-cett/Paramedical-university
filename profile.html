@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="translations.js"></script>
+    <script src="language-manager.js"></script>
 </head>
 <body>
     <!-- Header -->
@@ -15,12 +17,12 @@
             <div class="header-content">
                 <div class="logo">
                     <i class="fas fa-book-open"></i>
-                    <h1>منصة الدروس الجامعية</h1>
+                    <h1 data-translate="platformName">منصة الدروس الجامعية</h1>
                 </div>
                 <nav class="nav">
-                    <a href="student-lessons.html" class="btn btn-outline">الدروس</a>
+                    <a href="student-lessons.html" class="btn btn-outline" data-translate="lessons">الدروس</a>
                     <button onclick="logout()" class="btn btn-primary">
-                        <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+                        <i class="fas fa-sign-out-alt"></i> <span data-translate="logout">تسجيل الخروج</span>
                     </button>
                 </nav>
             </div>
@@ -31,7 +33,7 @@
     <div class="profile-container">
         <div id="loadingState" class="loading">
             <div class="loading-spinner"></div>
-            <p>جاري تحميل البيانات...</p>
+            <p data-translate="loading">جاري تحميل البيانات...</p>
         </div>
         
         <div id="profileContent" class="hidden">
@@ -45,32 +47,32 @@
             
             <div class="profile-info">
                 <div class="info-group">
-                    <span class="info-label">معرف المستخدم</span>
+                    <span class="info-label" data-translate="userId">معرف المستخدم</span>
                     <span class="info-value" id="userId">-</span>
                 </div>
                 
                 <div class="info-group">
-                    <span class="info-label">تاريخ التسجيل</span>
+                    <span class="info-label" data-translate="registrationDate">تاريخ التسجيل</span>
                     <span class="info-value" id="createdAt">-</span>
                 </div>
                 
                 <div class="info-group">
-                    <span class="info-label">آخر تسجيل دخول</span>
+                    <span class="info-label" data-translate="lastLogin">آخر تسجيل دخول</span>
                     <span class="info-value" id="lastLogin">-</span>
                 </div>
                 
                 <div class="info-group">
-                    <span class="info-label">الدور</span>
+                    <span class="info-label" data-translate="role">الدور</span>
                     <span class="info-value" id="userRole">طالب</span>
                 </div>
             </div>
             
             <div class="profile-actions">
                 <a href="student-lessons.html" class="btn btn-primary">
-                    <i class="fas fa-book"></i> الذهاب إلى الدروس
+                    <i class="fas fa-book"></i> <span data-translate="goToLessons">الذهاب إلى الدروس</span>
                 </a>
                 <button onclick="editProfile()" class="btn btn-outline">
-                    <i class="fas fa-edit"></i> تعديل الملف الشخصي
+                    <i class="fas fa-edit"></i> <span data-translate="editProfile">تعديل الملف الشخصي</span>
                 </button>
             </div>
         </div>
@@ -85,7 +87,7 @@
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
-            <p class="footer-text">© 2024 منصة الدروس الجامعية. جميع الحقوق محفوظة.</p>
+            <p class="footer-text">© <span data-translate="year">2024</span> <span data-translate="platformName">منصة الدروس الجامعية</span>. <span data-translate="allRightsReserved">جميع الحقوق محفوظة</span>.</p>
         </div>
     </footer>
 
@@ -166,11 +168,19 @@
                 document.getElementById('profileEmail').textContent = user.email;
                 document.getElementById('userId').textContent = user.id;
                 
-                // Format dates
+                // Format dates based on current language
+                const currentLang = typeof getCurrentLanguage !== 'undefined' ? getCurrentLanguage() : 'ar';
+                const locales = {
+                    'ar': 'ar-SA',
+                    'fr': 'fr-FR',
+                    'en': 'en-US'
+                };
+                const locale = locales[currentLang] || 'ar-SA';
+                
                 if (user.created_at) {
                     const createdDate = new Date(user.created_at);
                     document.getElementById('createdAt').textContent = 
-                        createdDate.toLocaleDateString('ar-SA', {
+                        createdDate.toLocaleDateString(locale, {
                             year: 'numeric',
                             month: 'long',
                             day: 'numeric'
@@ -180,7 +190,7 @@
                 if (profile?.last_login) {
                     const lastLoginDate = new Date(profile.last_login);
                     document.getElementById('lastLogin').textContent = 
-                        lastLoginDate.toLocaleDateString('ar-SA', {
+                        lastLoginDate.toLocaleDateString(locale, {
                             year: 'numeric',
                             month: 'long',
                             day: 'numeric',
@@ -188,18 +198,24 @@
                             minute: '2-digit'
                         });
                 } else {
-                    document.getElementById('lastLogin').textContent = 'الآن';
+                    document.getElementById('lastLogin').textContent = typeof t !== 'undefined' ? t('now') : 'الآن';
                 }
                 
-                // Set role
+                // Set role with translation support
                 if (profile?.role) {
-                    const roleNames = {
-                        'student': 'طالب',
-                        'teacher': 'معلم',
-                        'admin': 'مدير'
-                    };
-                    document.getElementById('userRole').textContent = 
-                        roleNames[profile.role] || profile.role;
+                    const roleElement = document.getElementById('userRole');
+                    // Use translation if available
+                    if (typeof t !== 'undefined') {
+                        roleElement.textContent = t(profile.role);
+                    } else {
+                        // Fallback to default names
+                        const roleNames = {
+                            'student': 'طالب',
+                            'teacher': 'معلم',
+                            'admin': 'مدير'
+                        };
+                        roleElement.textContent = roleNames[profile.role] || profile.role;
+                    }
                 }
                 
                 // Set avatar initial
@@ -230,7 +246,8 @@
         
         // Edit profile function
         function editProfile() {
-            showToast('ميزة التعديل قيد التطوير', 'info');
+            const message = typeof t !== 'undefined' ? t('editFeatureComingSoon') : 'ميزة التعديل قيد التطوير';
+            showToast(message, 'info');
         }
     </script>
 </body>
