@@ -764,3 +764,85 @@ body {
 .no-files-text {
     color: #9ca3af;
 }
+
+/* Email Confirmation Styles */
+.confirmation-content {
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.confirmation-message {
+    font-size: 1.1rem;
+    color: #4b5563;
+    margin-bottom: 0.5rem;
+}
+
+.confirmation-email {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #667eea;
+    margin-bottom: 1rem;
+}
+
+.confirmation-instructions {
+    color: #6b7280;
+    margin-bottom: 2rem;
+}
+
+.confirmation-tips {
+    background: #f9fafb;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    text-align: right;
+}
+
+.confirmation-tips h3 {
+    color: #1f2937;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+}
+
+.confirmation-tips ul {
+    list-style: none;
+    padding: 0;
+}
+
+.confirmation-tips li {
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+    padding-right: 1.5rem;
+    position: relative;
+}
+
+.confirmation-tips li:before {
+    content: "✓";
+    position: absolute;
+    right: 0;
+    color: #10b981;
+    font-weight: bold;
+}
+
+.form-icon-success {
+    background: #10b981;
+}
+
+.form-icon-success i {
+    color: white;
+}
+
+/* Password Reset Link */
+.forgot-password-link {
+    text-align: left;
+    margin-top: 0.5rem;
+}
+
+.forgot-password-link a {
+    color: #667eea;
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+
+.forgot-password-link a:hover {
+    text-decoration: underline;
+}

@@ -49,6 +49,9 @@
                     <i class="fas fa-lock input-icon"></i>
                     <input type="password" class="form-input with-icon" id="password" placeholder="••••••••" required>
                 </div>
+                <div class="forgot-password-link">
+                    <a href="reset-password.html">نسيت كلمة المرور؟</a>
+                </div>
             </div>
 
             <button type="submit" class="btn btn-primary btn-full-width">
@@ -99,7 +102,16 @@
                     password: password
                 });
 
-                if (error) throw error;
+                if (error) {
+                    if (error.message.includes('Email not confirmed')) {
+                        showToast('يرجى تأكيد بريدك الإلكتروني أولاً', 'error');
+                        setTimeout(() => {
+                            window.location.href = `email-confirmation.html?email=${encodeURIComponent(email)}`;
+                        }, 1500);
+                        return;
+                    }
+                    throw error;
+                }
 
                 showToast('تم تسجيل الدخول بنجاح!', 'success');
                 

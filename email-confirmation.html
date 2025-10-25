@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تأكيد البريد الإلكتروني - منصة الدروس الجامعية</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-book-open"></i>
+                    <h1>منصة الدروس الجامعية</h1>
+                </div>
+                <nav class="nav">
+                    <a href="index.html" class="btn btn-outline">الرئيسية</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Confirmation Message -->
+    <div class="form-container">
+        <div class="form-header">
+            <div class="form-icon form-icon-success">
+                <i class="fas fa-envelope-open-text"></i>
+            </div>
+            <h2 class="form-title">تأكيد البريد الإلكتروني</h2>
+        </div>
+
+        <div class="confirmation-content">
+            <p class="confirmation-message">
+                تم إرسال رسالة تأكيد إلى بريدك الإلكتروني
+            </p>
+            <p class="confirmation-email" id="userEmail"></p>
+            <p class="confirmation-instructions">
+                يرجى فتح بريدك الإلكتروني والنقر على رابط التأكيد لتفعيل حسابك.
+            </p>
+            
+            <div class="confirmation-tips">
+                <h3>ملاحظات مهمة:</h3>
+                <ul>
+                    <li>قد تستغرق الرسالة بضع دقائق للوصول</li>
+                    <li>تحقق من مجلد البريد غير المرغوب فيه (Spam)</li>
+                    <li>الرابط صالح لمدة 24 ساعة</li>
+                </ul>
+            </div>
+
+            <button onclick="resendConfirmation()" class="btn btn-outline btn-full-width" id="resendBtn">
+                <i class="fas fa-redo"></i> إعادة إرسال رسالة التأكيد
+            </button>
+
+            <div class="form-footer">
+                <p>تم التأكيد؟ <a href="login.html">تسجيل الدخول</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <i class="fas fa-check-circle toast-icon"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-text">© 2027 منصة الدروس الجامعية شبه الطبية. جميع الحقوق محفوظة.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        // Get email from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const email = urlParams.get('email');
+        
+        if (email) {
+            document.getElementById('userEmail').textContent = email;
+        }
+
+        let resendCooldown = false;
+
+        async function resendConfirmation() {
+            if (resendCooldown) {
+                showToast('يرجى الانتظار قبل إعادة الإرسال', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('resendBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
+
+            try {
+                const { error } = await supabase.auth.resend({
+                    type: 'signup',
+                    email: email
+                });
+
+                if (error) throw error;
+
+                showToast('تم إرسال رسالة التأكيد بنجاح', 'success');
+                
+                // Set cooldown
+                resendCooldown = true;
+                let countdown = 60;
+                
+                const interval = setInterval(() => {
+                    countdown--;
+                    btn.innerHTML = `يمكن إعادة الإرسال بعد ${countdown} ثانية`;
+                    
+                    if (countdown <= 0) {
+                        clearInterval(interval);
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-redo"></i> إعادة إرسال رسالة التأكيد';
+                        resendCooldown = false;
+                    }
+                }, 1000);
+
+            } catch (error) {
+                showToast('حدث خطأ في إعادة الإرسال', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-redo"></i> إعادة إرسال رسالة التأكيد';
+            }
+        }
+    </script>
+</body>
+</html>

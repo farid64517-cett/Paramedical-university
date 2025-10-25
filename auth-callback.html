@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جاري المعالجة...</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .loading-container {
+            text-align: center;
+            background: white;
+            padding: 3rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #e5e7eb;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1.5rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-text {
+            color: #4b5563;
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+        .loading-subtext {
+            color: #9ca3af;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-container">
+        <div class="spinner"></div>
+        <p class="loading-text">جاري تسجيل الدخول...</p>
+        <p class="loading-subtext">يرجى الانتظار</p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        async function handleAuthCallback() {
+            try {
+                // Get the session from the URL
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error) throw error;
+                
+                if (session) {
+                    // Check if user exists in database
+                    const { data: existingUser } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', session.user.id)
+                        .single();
+                    
+                    if (!existingUser) {
+                        // Create new user record for Google sign-in
+                        const { error: insertError } = await supabase
+                            .from('users')
+                            .insert({
+                                id: session.user.id,
+                                email: session.user.email,
+                                name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+                                role: 'student' // Default role for Google sign-in
+                            });
+                        
+                        if (insertError) {
+                            console.error('Error creating user record:', insertError);
+                        }
+                        
+                        // Redirect to student page for new users
+                        window.location.href = 'student-lessons.html';
+                    } else {
+                        // Redirect based on existing user role
+                        if (existingUser.role === 'teacher') {
+                            window.location.href = 'teacher-dashboard.html';
+                        } else {
+                            window.location.href = 'student-lessons.html';
+                        }
+                    }
+                } else {
+                    // No session, redirect to login
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                console.error('Auth callback error:', error);
+                window.location.href = 'login.html';
+            }
+        }
+        
+        // Handle auth callback on page load
+        handleAuthCallback();
+    </script>
+</body>
+</html>

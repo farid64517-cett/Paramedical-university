@@ -85,6 +85,16 @@
             </button>
         </form>
 
+        <div class="divider-container">
+            <hr class="divider-line">
+            <span class="divider-text">أو</span>
+        </div>
+
+        <button onclick="registerWithGoogle()" class="btn btn-outline btn-google">
+            <i class="fab fa-google"></i>
+            التسجيل بـ Google
+        </button>
+
         <div class="form-footer">
             <p>لديك حساب بالفعل؟ <a href="login.html">تسجيل الدخول</a></p>
         </div>
@@ -167,15 +177,29 @@
                     if (dbError) throw dbError;
                 }
 
-                showToast('تم إنشاء الحساب بنجاح! يرجى تأكيد بريدك الإلكتروني', 'success');
+                showToast('تم إنشاء الحساب بنجاح! جاري التوجيه...', 'success');
                 
                 setTimeout(() => {
-                    window.location.href = 'login.html';
-                }, 2000);
+                    window.location.href = `email-confirmation.html?email=${encodeURIComponent(email)}`;
+                }, 1500);
             } catch (error) {
                 showToast(error.message || 'حدث خطأ في إنشاء الحساب', 'error');
             }
         });
+
+        async function registerWithGoogle() {
+            try {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.origin + '/auth-callback.html'
+                    }
+                });
+                if (error) throw error;
+            } catch (error) {
+                showToast('حدث خطأ في التسجيل بـ Google', 'error');
+            }
+        }
     </script>
 </body>
 </html>
